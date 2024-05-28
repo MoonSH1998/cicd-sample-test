@@ -1,0 +1,36 @@
+# gitlab-ci.yml
+stages:
+    - build_and_deploy
+    - update_gitops
+variables:
+  DOCKER_HOST: tcp://docker-svc:2375
+  APP_VERSION: 0.0.1 # 버전은 임의로 설정
+  REGISTRY_IMAGE_NAME: nginx
+build_and_deploy:
+    stage: build_and_deploy
+    image:
+      name: docker:24.0.2-dind
+    script:
+      - echo "APP_BERSION = $APP_VERSION"   
+      - docker login ${NEXUS_HOST} -u ${NEXUS_ID} -p ${NEXUS_PW}
+      - docker build -t ${NEXUS_HOST}/nginx:$APP_VERSION .
+      - docker push ${NEXUS_HOST}/nginx:$APP_VERSION
+update_gitops:
+  stage: update_gitops
+  image:
+    name: ubuntu:22.04-git-kustomize-installed
+  script:
+    - echo "-----------------------------"
+    - "GitOps Repository deploy"
+    - cd /
+    - git clone http://root:${ACCESS_TOKEN}@${ip-address}/root/manifest.git
+    - cd manifest
+    - cat kustomization.yaml
+    - /kustomize edit set image $REGISTRY_IMAGE:$APP_VERSION
+    - git config --global user.eamil = "admin@example.com"
+    - git config --global user.name = "root"
+    - git add .
+    - git commit -m "Update image tag to $APP_VERSION"
+    - git push http://root:${TOKEN}@${ip-address}/root/manifest.git
+  only:
+    - main
